@@ -4,7 +4,7 @@
 // hardware for the remote hand control is not supported.
 //
 // Many thanks to orly.andico@gmail.com, for the original command parser, others for bits on code picked up here and there on the net
-//28BYJ
+// 28BYJ
 // Since the MoonLite focuser only works with positive integers, I center (zero) my system at 30000. The range is from
 // 0 to 65535, so 30000 is a good round number for the center.
 // If the Current Position, or New Position is set to 0, this code will set the values at 30000. The reason for this
@@ -16,7 +16,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#define HOME 30000
+#define HOME 0
 #define MAXCOMMAND 8
 #define ONE_WIRE_BUS 2
 
@@ -26,6 +26,7 @@
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
+#define ON_OFF_DISPLAY_BUTTON_PIN 9
 #define FORWARD_BUTTTON_PIN 10
 #define BACKWARD_BUTTON_PIN 11
 #define SWITCH_SPEED_BUTTON_PIN 12
@@ -43,24 +44,21 @@ int speed = 2;
 int eoc = 0;
 int idx = 0;
 long millisLastMove = 0;
-int Current = HOME;
-int Target = HOME;
-int DistanceToGo = 0;
+long Current = HOME;
+long Target = HOME;
+long DistanceToGo = 0;
 int minSpeed = 2;
 int maxSpeed = 20;
-int testPin = 12;
 
 // Temperature measurement
 float temperature;
 int tempTemp;
-
 
 // Motor connections
 int motorPin1 = 7; // Blue - 28BYJ48 pin 1
 int motorPin2 = 6; // Pink - 28BYJ48 pin 2
 int motorPin3 = 5; // Yellow - 28BYJ48 pin 3
 int motorPin4 = 4; // Orange - 28BYJ48 pin 4
-// Red - 28BYJ4 8pin  (5VCC)
 
 // lookup table for motor phase control
 int StepTable[8] = {0b01001, 0b00001, 0b00011, 0b00010, 0b00110, 0b00100, 0b01100, 0b01000};
@@ -72,9 +70,12 @@ DallasTemperature tempSensor(&oneWire);
 // Display
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT);
 bool displayInitialized = false;
+bool displayOn = true;
+bool manualRunning = false;
 
 unsigned long lastMillis = 0;
 unsigned long displayLastMillis = 0;
+unsigned long displaySwitchLastMillis = 0;
 unsigned long handSpeedSwitchMillis = 0;
 
 void writeLongOnEEPROM(int idx, long value)
@@ -114,85 +115,126 @@ bool readBooleanFromEEPROM(int idx)
 void printDisplayInfo()
 {
 
-  unsigned long currentMillis = millis();
-  unsigned long diff = currentMillis - displayLastMillis;
-  bool canRun = (displayLastMillis == 0 || diff >= 1000) && displayInitialized;
-
-  if (displayInitialized)
+  if(!isRunning && displayInitialized)
   {
-
-    int nextPos = SCREEN_HEIGHT / 3;
-
-    //Clean buffer
-    display.clearDisplay();
-
-    display.setTextColor(WHITE);
-
-    display.setTextSize(2);
-
-    // Convert float to stringfloat (arduino sprintf don't support float)
-    char str_temperature[6];
-    dtostrf(temperature, 4, 2, str_temperature);
-
-    char tempBuf[20];
-    sprintf(tempBuf, "T:%s C", str_temperature);
-
-    //Sposto il cursore a metà altezza del display
-    display.setCursor(0, 0);
-    display.println(tempBuf);
-
-    char posBuf[20];
-    sprintf(posBuf, "P:%i", Current);
-
-    display.setCursor(0, nextPos);
-    display.println(posBuf);
-
-    char speedBuf[20];
-    sprintf(speedBuf, "S:%i", speed);
-
-    display.setCursor(0, nextPos * 2);
-    display.println(speedBuf);
-
-    //La mando in stampa
-    display.display();
-
-    displayLastMillis = currentMillis;
+    unsigned long currentMillis = millis();
+    unsigned long diff = currentMillis - displayLastMillis;
+  
+    if (displayLastMillis == 0 || diff >= 700)
+    {
+  
+      // Clean buffer
+      display.clearDisplay();
+  
+      if (displayOn)
+      {
+  
+        int nextPos = SCREEN_HEIGHT / 3;
+  
+        display.setTextColor(WHITE);
+  
+        display.setTextSize(2);
+  
+        // Convert float to stringfloat (arduino sprintf don't support float)
+        char str_temperature[6];
+        dtostrf(temperature, 4, 2, str_temperature);
+  
+        char tempBuf[20];
+        sprintf(tempBuf, "T:%s C", str_temperature);
+  
+        // Sposto il cursore a metà altezza del display
+        display.setCursor(0, 0);
+        display.println(tempBuf);
+  
+        char posBuf[30];
+        sprintf(posBuf, "P:%u", Current);
+  
+        display.setCursor(0, nextPos);
+        display.println(posBuf);
+  
+        char speedBuf[20];
+        sprintf(speedBuf, "S:%u", speed);
+  
+        display.setCursor(0, nextPos * 2);
+        display.println(speedBuf);
+      }
+  
+      
+  
+      display.display();
+  
+      displayLastMillis = currentMillis;
+    }
   }
+}
+
+void setRunning(int running) {
+
+  if(running && isRunning != running && displayInitialized) {
+
+      // Clean buffer
+      display.clearDisplay();
+
+        
+     int nextPos = SCREEN_HEIGHT / 3;
+  
+     display.setTextColor(WHITE);
+     display.setTextSize(2);
+
+     display.setCursor(0, 0);
+     display.println("FOCUSING");
+     display.setCursor(0, nextPos);
+     display.println("IN");
+     display.setCursor(0, nextPos * 2);
+     display.println("PROGRESS");
+
+     // Applico la pulizia al display
+     display.display();
+  }
+
+  isRunning = running;
+  
 }
 
 void forwardstep()
 {
-
-  Current++;
-  if (++phase > 7)
-    phase = 0;
-
-  setOutput(phase);
-  for (int i = 0; i < speed >> 1; i++)
+  if (Current <= 65535)
   {
-    delay(1);
-    printDisplayInfo();
-  }
+    Current++;
+    if (++phase > 7)
+      phase = 0;
 
-  writeLongOnEEPROM(EEPROM_POS_START_IDX, Current);
-  writeBooleanOnEEPROM(EEPROM_INITIALIZED_IDX, true);
+    setOutput(phase);
+    for (int i = 0; i < speed >> 1; i++)
+    {
+      delay(1);
+    }
+  }
+  else {
+    setRunning(0);
+    setManualRunning(false);
+  }
 }
 
 void backwardstep()
 {
-  Current--;
-  if (--phase < 0)
-    phase = 7;
 
-  setOutput(phase);
-  for (int i = 0; i < speed >> 1; i++)
+  if (Current >= 1)
   {
-    delay(1);
-    printDisplayInfo();
-  }
+    Current--;
+    if (--phase < 0)
+      phase = 7;
 
-  writeLongOnEEPROM(EEPROM_POS_START_IDX, Current);
-  writeBooleanOnEEPROM(EEPROM_INITIALIZED_IDX, true);
+    setOutput(phase);
+    for (int i = 0; i < speed >> 1; i++)
+    {
+      delay(1);
+    }
+  } 
+  else {
+    setRunning(0);
+    setManualRunning(false);
+  }
 }
 
 void setOutput(int out)
@@ -252,6 +294,19 @@ void switchHandSPeed()
   }
 }
 
+void switchDisplayOnOff()
+{
+  unsigned long currentMillis = millis();
+  unsigned long diff = currentMillis - displaySwitchLastMillis;
+  bool canRun = (displaySwitchLastMillis == 0 || diff >= 200) && displayInitialized;
+
+  if (canRun)
+  {
+    displayOn = !displayOn;
+    displaySwitchLastMillis = currentMillis;
+  }
+}
+
 int GetTemp(void)
 {
   temperature = tempSensor.getTempCByIndex(0);
@@ -264,6 +319,22 @@ long hexstr2long(char *line)
   long ret = 0;
   ret = strtol(line, NULL, 16);
   return (ret);
+}
+
+void setManualRunning(bool mr)
+{
+
+  if (!mr && mr != manualRunning)
+  {
+  }
+
+  manualRunning = mr;
+
+  if (!mr)
+  {
+    writeLongOnEEPROM(EEPROM_POS_START_IDX, Current);
+    writeBooleanOnEEPROM(EEPROM_INITIALIZED_IDX, true);
+  }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -285,7 +356,7 @@ void setup()
   Serial.begin(9600);
   tempSensor.begin();
 
-  //setup the motor pins as outputs
+  // setup the motor pins as outputs
   pinMode(motorPin1, OUTPUT);
   pinMode(motorPin2, OUTPUT);
   pinMode(motorPin3, OUTPUT);
@@ -321,7 +392,6 @@ void setup()
 void loop()
 {
 
-
   DistanceToGo = Target - Current; /* compute remaining distance to go */
 
   if (!Serial.available())
@@ -356,7 +426,9 @@ void loop()
     if (DistanceToGo == 0)
     {
       // if motion is complete
-      isRunning = 0;
+      setRunning(0);
+      writeLongOnEEPROM(EEPROM_POS_START_IDX, Current);
+      writeBooleanOnEEPROM(EEPROM_INITIALIZED_IDX, true);
     }
   }
 
@@ -446,7 +518,7 @@ void loop()
     case ('H' << 8 | 'P'):
       // PH command Find motor home
       Current = HOME;
-      isRunning = 1;
+      setRunning(1);
       break;
 
     case ('V' << 8 | 'G'):
@@ -506,12 +578,14 @@ void loop()
 
     case ('G' << 8 | 'F'):
       // FG command Start motor command
-      isRunning = 1;
+      setRunning(1);
       break;
 
     case ('Q' << 8 | 'F'):
       // FQ command Stop motor command
-      isRunning = 0;
+      setRunning(0);
+      writeLongOnEEPROM(EEPROM_POS_START_IDX, Current);
+      writeBooleanOnEEPROM(EEPROM_INITIALIZED_IDX, true);
       break;
     }
 
@@ -525,28 +599,41 @@ void loop()
     bool forwardButtonPressed = digitalRead(FORWARD_BUTTTON_PIN);
     bool backwardButtonPressed = digitalRead(BACKWARD_BUTTON_PIN);
     bool switchSpeedButtonPressed = digitalRead(SWITCH_SPEED_BUTTON_PIN);
+    bool displayOnOffPressed = digitalRead(ON_OFF_DISPLAY_BUTTON_PIN);
 
     if (forwardButtonPressed)
     {
       if (isRunning)
       {
-        isRunning = 0;
+        setRunning(0);
       }
 
+      setManualRunning(true);
       forwardstep();
     }
     else if (backwardButtonPressed)
     {
       if (isRunning)
       {
-        isRunning = 0;
+        setRunning(0);
       }
 
+      setManualRunning(true);
       backwardstep();
     }
     else if (switchSpeedButtonPressed)
     {
       switchHandSPeed();
+      setManualRunning(false);
+    }
+    else if (displayOnOffPressed)
+    {
+      switchDisplayOnOff();
+      setManualRunning(false);
+    }
+    else
+    {
+      setManualRunning(false);
     }
   }
 
