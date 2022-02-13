@@ -115,90 +115,88 @@ bool readBooleanFromEEPROM(int idx)
 void printDisplayInfo()
 {
 
-  if(!isRunning && displayInitialized)
+  if (!isRunning && displayInitialized)
   {
     unsigned long currentMillis = millis();
     unsigned long diff = currentMillis - displayLastMillis;
-  
+
     if (displayLastMillis == 0 || diff >= 700)
     {
-  
+
       // Clean buffer
       display.clearDisplay();
-  
+
       if (displayOn)
       {
-  
+
         int nextPos = SCREEN_HEIGHT / 3;
-  
+
         display.setTextColor(WHITE);
-  
+
         display.setTextSize(2);
-  
+
         // Convert float to stringfloat (arduino sprintf don't support float)
         char str_temperature[6];
         dtostrf(temperature, 4, 2, str_temperature);
-  
+
         char tempBuf[20];
         sprintf(tempBuf, "T:%s C", str_temperature);
-  
+
         // Sposto il cursore a metà altezza del display
         display.setCursor(0, 0);
         display.println(tempBuf);
-  
+
         char posBuf[30];
         sprintf(posBuf, "P:%u", Current);
-  
+
         display.setCursor(0, nextPos);
         display.println(posBuf);
-  
+
         char speedBuf[20];
         sprintf(speedBuf, "S:%u", speed);
-  
+
         display.setCursor(0, nextPos * 2);
         display.println(speedBuf);
       }
-  
-      
-  
+
       display.display();
-  
+
       displayLastMillis = currentMillis;
     }
   }
 }
 
-void setRunning(int running) {
+void setRunning(int running)
+{
 
-  if(running && isRunning != running && displayInitialized) {
+  if (running && isRunning != running && displayInitialized)
+  {
 
-      // Clean buffer
-      display.clearDisplay();
+    // Clean buffer
+    display.clearDisplay();
 
-        
-     int nextPos = SCREEN_HEIGHT / 3;
-  
-     display.setTextColor(WHITE);
-     display.setTextSize(2);
+    int nextPos = SCREEN_HEIGHT / 3;
 
-     display.setCursor(0, 0);
-     display.println("FOCUSING");
-     display.setCursor(0, nextPos);
-     display.println("IN");
-     display.setCursor(0, nextPos * 2);
-     display.println("PROGRESS");
+    display.setTextColor(WHITE);
+    display.setTextSize(2);
 
-     // Applico la pulizia al display
-     display.display();
+    display.setCursor(0, 0);
+    display.println("FOCUSING");
+    display.setCursor(0, nextPos);
+    display.println("IN");
+    display.setCursor(0, nextPos * 2);
+    display.println("PROGRESS");
+
+    // Applico la pulizia al display
+    display.display();
   }
 
   isRunning = running;
-  
 }
 
 void forwardstep()
 {
-  if (Current <= 65535)
+  if (Current < 65535)
   {
     Current++;
     if (++phase > 7)
@@ -210,7 +208,8 @@ void forwardstep()
       delay(1);
     }
   }
-  else {
+  else
+  {
     setRunning(0);
     setManualRunning(false);
   }
@@ -219,7 +218,7 @@ void forwardstep()
 void backwardstep()
 {
 
-  if (Current >= 1)
+  if (Current > 0)
   {
     Current--;
     if (--phase < 0)
@@ -230,8 +229,9 @@ void backwardstep()
     {
       delay(1);
     }
-  } 
-  else {
+  }
+  else
+  {
     setRunning(0);
     setManualRunning(false);
   }
