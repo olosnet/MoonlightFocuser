@@ -13,8 +13,6 @@ Upgrade with support for:
  *  Saving position on Arduino EEPROM
  *  Simple wired remote control
 
-Tested on Arduino Uno / Nano
-
 Required libraries:
 
 * OneWire
