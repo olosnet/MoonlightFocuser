@@ -1,14 +1,16 @@
-// Moonlite-compatible stepper controller
-// Written by George Carlson June 2014.
-// This version uses the Tiny 2.0 a uController based on the Atmel ATMEGA32U4.
-// hardware for the remote hand control is not supported.
-//
-// Many thanks to orly.andico@gmail.com, for the original command parser, others for bits on code picked up here and there on the net
-// 28BYJ
-// Since the MoonLite focuser only works with positive integers, I center (zero) my system at 30000. The range is from
-// 0 to 65535, so 30000 is a good round number for the center.
-// If the Current Position, or New Position is set to 0, this code will set the values at 30000. The reason for this
-// is the system is designed to be set at center, manually focused, then focused in a +/- fashion by the controller.
+/*  Moonlite-compatible stepper controller
+ *  Original written by George Carlson June 2014.
+ *  Written by Valerio Faiuolo 2022.
+ *  Upgrade with support for:
+ *  
+ *  - Temperature with DS18B20
+ *  - Oled Display 128x64 with on / off button
+ *  - Saving position on Arduino EEPROM
+ *  - Simple wired remote control
+ *  
+ *  Tested on Arduino Uno / Nano
+ */
+
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -142,7 +144,7 @@ void printDisplayInfo()
         char tempBuf[20];
         sprintf(tempBuf, "T:%s C", str_temperature);
 
-        // Sposto il cursore a metà altezza del display
+        // I move the cursor halfway up the display 
         display.setCursor(0, 0);
         display.println(tempBuf);
 
