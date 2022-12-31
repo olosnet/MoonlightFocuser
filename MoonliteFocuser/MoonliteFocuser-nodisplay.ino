@@ -100,6 +100,11 @@ bool readBooleanFromEEPROM(int idx)
   return (bool)res;
 }
 
+void setRunning(int running)
+{
+  isRunning = running;
+}
+
 void forwardstep()
 {
   if (Current < 65535)
